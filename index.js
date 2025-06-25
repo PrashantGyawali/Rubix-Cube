@@ -7,6 +7,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 import { AnimationQueue } from './animationQueue.js';
 import { RubixLighting } from './lighting.js';
+import { TouchInput } from './touch.js';
 
 // Scene, camera, renderer
 const scene = new THREE.Scene();
@@ -95,93 +96,12 @@ function initRubiksCube() {
 }
 
 
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
-
-let dragStartMouse = null;
-let dragStartPoint = null;
-let selectedFaceNormal = null;
-let selectedCube = null;
-
-function updateMouseCoords(event, targetVec) {
-    const rect = renderer.domElement.getBoundingClientRect();
-    targetVec.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    targetVec.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-}
-
-// Helper to convert a 2D screen point into a 3D ray line
-function getRayLine(mouseVec2) {
-    raycaster.setFromCamera(mouseVec2, camera);
-    const origin = raycaster.ray.origin.clone();
-    const direction = raycaster.ray.direction.clone().multiplyScalar(100);
-    return new THREE.Line3(origin, origin.clone().add(direction));
-}
-
-// Intersect ray line with plane
-function planeIntersect(line, plane) {
-    const result = new THREE.Vector3();
-    if (!plane.intersectLine(line, result)) return null;
-    return result;
-}
-
-renderer.domElement.addEventListener('mousedown', (event) => {
-    updateMouseCoords(event, mouse);
-    raycaster.setFromCamera(mouse, camera);
-    document.body.style.cursor = 'grabbing';
-
-    const intersects = raycaster.intersectObjects(group.children, true);
-    if (intersects.length > 0) {
-        const intersect = intersects[0];
-        selectedCube = intersect.object;
-
-        // Get face normal in world space
-        selectedFaceNormal = intersect.face.normal.clone();
-        selectedFaceNormal.transformDirection(intersect.object.matrixWorld);
-
-        // Project mouse to 3D point on face
-        const facePlane = new THREE.Plane().setFromNormalAndCoplanarPoint(selectedFaceNormal, intersect.point);
-        dragStartMouse = mouse.clone(); // store normalized mouse
-        const dragStartLine = getRayLine(dragStartMouse);
-        dragStartPoint = planeIntersect(dragStartLine, facePlane);
-
-        controls.enableRotate = false;
-    }
-});
-
-renderer.domElement.addEventListener('mouseup', (event) => {
-    if (!dragStartPoint || !selectedFaceNormal || !selectedCube) return;
-    document.body.style.cursor = 'default';
-    controls.enableRotate = true;
-
-    updateMouseCoords(event, mouse);
-
-    // Project end point on same face plane
-    const facePlane = new THREE.Plane().setFromNormalAndCoplanarPoint(selectedFaceNormal, dragStartPoint);
-    const dragEndLine = getRayLine(mouse.clone());
-    const dragEndPoint = planeIntersect(dragEndLine, facePlane);
-    if (!dragEndPoint) return;
-
-    const dragVectorRaw = dragEndPoint.clone().sub(dragStartPoint)
-    const dragVector = dragVectorRaw.clone().normalize();
-
-    const dragMagnitude = dragVectorRaw.length();
-
-    if (dragMagnitude < 1) {
-        console.log("Too short — not rotating");
-        return;
-    }
-
-    // Call your rotation logic
-    addRotationForTouch(selectedFaceNormal, selectedCube.position, dragVector);
-
-    // Reset drag state
-    dragStartMouse = null;
-    dragStartPoint = null;
-    selectedFaceNormal = null;
-    selectedCube = null;
-});
-
-
+const touchInput=new TouchInput(renderer.domElement);
+touchInput.bindCamera(camera);
+touchInput.bindGroup(group);
+touchInput.bindControls(controls);
+touchInput.bindRotationHandler(addRotationForTouch);
+touchInput.addListeners();
 
 
 
@@ -215,9 +135,13 @@ function animate() {
     controls.update();
     renderer.render(scene, camera);
 }
-animate();
 
-shuffle();
+window.onload = () => {
+    animate();
+    shuffle();
+}
+
+
 // Handle browser resize
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -242,7 +166,7 @@ window.addEventListener("keydown", (event) => {
 function addRotationForKey(rotationKey, speed) {
     const axisOfRotation = rotationKey < 4 ? 'x' : rotationKey < 7 ? 'z' : 'y';
     const selectionCriteria = rotationKey % 3;
-    animationQueue.add({ axisOfRotation, rotationAngle: Math.PI/2, selectionCriteria, speed: speed });
+    animationQueue.add({ axisOfRotation, rotationAngle: Math.PI / 2, selectionCriteria, speed: speed });
 }
 
 function addRotationForTouch(normal, position, dragVector, magnitude = 1) {
@@ -307,7 +231,7 @@ function addRotationForTouch(normal, position, dragVector, magnitude = 1) {
         if (Math.abs(dragH) > Math.abs(dragV)) {
             axisOfRotation = 'y';
             selectionCriteria = Math.round(position.y / 2 + 1);
-            rotationAngle = (isPositive ? dragH > 0 : dragH < 0) ?  Math.PI / 2 : - Math.PI / 2;
+            rotationAngle = (isPositive ? dragH > 0 : dragH < 0) ? Math.PI / 2 : - Math.PI / 2;
         } else {
             axisOfRotation = 'x';
             selectionCriteria = Math.round(position.x / 2 + 1);

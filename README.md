@@ -4,6 +4,8 @@
 
 A 3D interactive Rubik's Cube simulator built using JavaScript and Three.js. This project provides a smooth 3D experience with responsive controls.
 
+![Rubix-Cube](image1.png)
+
 ## Features
 
 * 3D visualization rendered with Three.js.
